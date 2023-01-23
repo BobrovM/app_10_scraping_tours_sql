@@ -2,6 +2,7 @@ import time
 import requests
 import selectorlib
 import smtplib, ssl, os
+import psycopg2 as pg
 
 
 URL = "http://programmer100.pythonanywhere.com/tours/"
@@ -31,21 +32,35 @@ Subject: New tour!
 
 Message: {extracted}
 """
-
     with smtplib.SMTP_SSL(host, port, context=context) as server:
         server.login(mail, password)
         server.sendmail(mail, mail, message)
 
     print("Email was sent!")
 
+
 def store(extracted):
-    with open("data.txt", "a") as file:
-        file.write(extracted + "\n")
+    row = extracted.split(",")
+    row = [item.strip() for item in row]
+    connection = pg.connect("dbname=pc_d10_tours_events user=postgres password=4531")
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO events VALUES(%s,%s,%s)", row)
+    connection.commit()
+    cursor.close()
+    connection.close()
 
 
-def read_file():
-    with open("data.txt", "r") as file:
-        return file.read()
+def read_db(extracted):
+    row = extracted.split(",")
+    row = [item.strip() for item in row]
+    band, city, tdate = row
+    connection = pg.connect("dbname=pc_d10_tours_events user=postgres password=4531")
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM events WHERE band=%s AND city=%s AND tdate=%s", (band, city, tdate))
+    row = cursor.fetchall()
+    cursor.close()
+    connection.close()
+    return row
 
 
 if __name__ == "__main__":
@@ -54,8 +69,8 @@ if __name__ == "__main__":
         extracted = extract(scraped)
         print(extracted)
         if extracted != "No upcoming tours":
-            content = read_file()
-            if extracted not in content:
+            content = read_db(extracted)
+            if not content:
                 store(extracted)
                 send_email(extracted)
         time.sleep(15)
